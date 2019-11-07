@@ -1,8 +1,6 @@
-#!/usr/bin/env python
-
 # This file is part of parallel-ssh.
 
-# Copyright (C) 2014-2017 Panos Kittenis
+# Copyright (C) 2014-2018 Panos Kittenis.
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,11 +33,8 @@ import logging
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
-from .pssh_client import ParallelSSHClient
-from .ssh_client import SSHClient
-from .utils import enable_host_logger
 from .exceptions import UnknownHostException, \
-     AuthenticationException, ConnectionErrorException, SSHException
+    AuthenticationException, ConnectionErrorException, SSHException
 
 host_logger = logging.getLogger('pssh.host_logger')
 logger = logging.getLogger('pssh')

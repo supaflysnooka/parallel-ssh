@@ -1,6 +1,6 @@
 # This file is part of parallel-ssh.
 
-# Copyright (C) 2014-2017 Panos Kittenis
+# Copyright (C) 2014-2018 Panos Kittenis.
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 
-"""Package containing static utility functions for parallel-ssh module."""
+"""Module containing static utility functions for parallel-ssh."""
 
 
 import logging
@@ -54,29 +54,34 @@ def enable_host_logger():
 
 
 def load_private_key(_pkey):
-    """Load private key from pkey file object or filename
+    """Load private key from pkey file object or filename.
+
+    For Paramiko based clients only.
 
     :param pkey: File object or file name containing private key
     :type pkey: file/str"""
     if not hasattr(_pkey, 'read'):
         _pkey = open(_pkey)
-    for keytype in [RSAKey, DSSKey, ECDSAKey]:
-        try:
-            pkey = keytype.from_private_key(_pkey)
-        except SSHException:
-            _pkey.seek(0)
-            continue
-        else:
-            return pkey
+    try:
+        for keytype in [RSAKey, DSSKey, ECDSAKey]:
+            try:
+                pkey = keytype.from_private_key(_pkey)
+            except SSHException:
+                _pkey.seek(0)
+                continue
+            else:
+                return pkey
+    finally:
+        _pkey.close()
     logger.error("Failed to load private key using all available key types "
                  "- giving up..")
 
 
-def read_openssh_config(_host, config_file=None):
+def read_openssh_config(host, config_file=None):
     """Parses user's OpenSSH config for per hostname configuration for
     hostname, user, port and private key values
 
-    :param _host: Hostname to lookup in config
+    :param host: Hostname to lookup in config
     """
     _ssh_config_file = config_file if config_file else \
         os.path.sep.join([os.path.expanduser('~'), '.ssh', 'config'])
@@ -86,10 +91,10 @@ def read_openssh_config(_host, config_file=None):
         return
     ssh_config = SSHConfig()
     ssh_config.parse(open(_ssh_config_file))
-    host_config = ssh_config.lookup(_host)
+    host_config = ssh_config.lookup(host)
     host = (host_config['hostname'] if
             'hostname' in host_config
-            else _host)
+            else host)
     user = host_config['user'] if 'user' in host_config else None
     port = int(host_config['port']) if 'port' in host_config else 22
     pkey = None

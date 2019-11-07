@@ -1,19 +1,18 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+#
 # This file is part of parallel-ssh.
-
+#
 # Copyright (C) 2015 Panos Kittenis
-
+#
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
 # License as published by the Free Software Foundation, version 2.1.
-
+#
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # Lesser General Public License for more details.
-
+#
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -29,14 +28,15 @@ import warnings
 import shutil
 import sys
 from socket import timeout as socket_timeout
+from platform import python_version
 
-import gevent
-from pssh import ParallelSSHClient, UnknownHostException, \
-     AuthenticationException, ConnectionErrorException, SSHException, \
-     logger as pssh_logger
-from pssh.exceptions import HostArgumentException
+from gevent import sleep
+from pssh.pssh_client import ParallelSSHClient, logger as pssh_logger
+from pssh.exceptions import UnknownHostException, \
+    AuthenticationException, ConnectionErrorException, SSHException, \
+    HostArgumentException
 from pssh.utils import load_private_key
-from embedded_server.embedded_server import start_server, make_socket, \
+from .embedded_server.embedded_server import start_server, make_socket, \
      logger as server_logger, paramiko_logger, start_server_from_ip
 from pssh.agent import SSHAgent
 from paramiko import RSAKey
@@ -157,8 +157,8 @@ class ParallelSSHClientTest(unittest.TestCase):
         expected_exit_code = 0
         expected_stdout = [self.fake_resp]
         expected_stderr = []
-        stdout = list(output[self.host]['stdout'])
-        stderr = list(output[self.host]['stderr'])
+        stdout = list(output[self.host].stdout)
+        stderr = list(output[self.host].stderr)
         exit_code = output[self.host]['exit_code']
         self.assertEqual(expected_exit_code, exit_code,
                          msg="Got unexpected exit code - %s, expected %s" %
@@ -249,7 +249,7 @@ class ParallelSSHClientTest(unittest.TestCase):
         output = client.run_command(self.fake_cmd, stop_on_errors=False)
         # Handle exception
         try:
-            gevent.sleep(server_timeout+0.2)
+            sleep(server_timeout+0.2)
             client.join(output)
             if not server.exception:
                 raise Exception(
@@ -282,7 +282,7 @@ class ParallelSSHClientTest(unittest.TestCase):
         self.assertFalse(self.client.finished(output))
         # Embedded server is also asynchronous and in the same thread
         # as our client so need to sleep for duration of server connection
-        gevent.sleep(expected_lines)
+        sleep(expected_lines)
         self.client.join(output)
         self.assertTrue(self.client.finished(output))
         self.assertTrue(output[self.host]['exit_code'] == 0,
@@ -979,7 +979,7 @@ class ParallelSSHClientTest(unittest.TestCase):
         # and utf-8 encoded ascii decoded to utf-16 on py3
         output = client.run_command(self.fake_cmd, encoding='utf-16')
         stdout = list(output[self.host]['stdout'])
-        if type(self.fake_resp) == bytes:
+        if isinstance(self.fake_resp, bytes):
             self.assertEqual([self.fake_resp.decode('utf-16')], stdout)
         else:
             self.assertEqual([self.fake_resp.encode('utf-8').decode('utf-16')],
@@ -1030,9 +1030,11 @@ class ParallelSSHClientTest(unittest.TestCase):
         self.assertTrue(hasattr(output[self.host], 'exception'))
         self.assertTrue(hasattr(output[self.host], 'exit_code'))
 
+    @unittest.skip('produces false failures')
     def test_run_command_user_sudo(self):
         user = 'cmd_user'
-        output = self.client.run_command(self.fake_cmd, user=user)
+        output = self.client.run_command('some cmd', user=user,
+                                         use_pty=False)
         self.client.join(output)
         stderr = list(output[self.host].stderr)
         self.assertTrue(len(stderr) > 0)
@@ -1050,6 +1052,12 @@ class ParallelSSHClientTest(unittest.TestCase):
         stdout = list(output[self.host].stdout)
         self.assertTrue(len(stdout) > 0)
         self.assertTrue(output[self.host].exit_code == 0)
+
+    def test_extra_paramiko_args(self):
+        output = self.client.run_command('id', gss_auth=True, gss_kex=True,
+                                         gss_host='gss_host')
+        trans = self.client.host_clients[self.host].client.get_transport()
+        self.assertEqual(trans.gss_host, 'gss_host')
 
     def test_proxy_remote_host_failure_timeout(self):
         """Test that timeout setting is passed on to proxy to be used for the
@@ -1081,6 +1089,41 @@ class ParallelSSHClientTest(unittest.TestCase):
             del client
             server.kill()
             proxy_server.kill()
+
+    def test_openssh_config(self):
+        self.server.kill()
+        ssh_config = os.path.expanduser('~/.ssh/config')
+        mode = '0700' if python_version() < '3' else 0o700
+        if os.path.isfile(ssh_config):
+            shutil.move(ssh_config, '.')
+        elif not os.path.isdir(os.path.expanduser('~/.ssh')):
+            os.mkdir(os.path.expanduser('~/.ssh'), mode=mode)
+        config_file = open(ssh_config, 'w')
+        _host = "127.0.0.2"
+        _user = "config_user"
+        _server, _port = start_server_from_ip(_host)
+        content = [("""Host %s\n""" % (self.host,)),
+                   ("""  HostName %s\n""" % (_host,)),
+                   ("""  User %s\n""" % (_user,)),
+                   ("""  Port %s\n""" % (_port,)),
+                   ("""  IdentityFile %s\n""" % (PKEY_FILENAME,)),
+        ]
+        config_file.writelines(content)
+        config_file.close()
+        try:
+            client = ParallelSSHClient([self.host],
+                                       num_retries=1)
+            output = client.run_command(self.fake_cmd)
+            self.assertTrue(self.host in output)
+            output = list(output[self.host].stdout)
+            expected = [self.fake_resp]
+            self.assertEqual(output, expected)
+        except Exception:
+            raise
+        finally:
+            os.unlink(ssh_config)
+            if os.path.isfile('config'):
+                shutil.move('config', os.path.expanduser('~/.ssh/'))
 
 
 if __name__ == '__main__':

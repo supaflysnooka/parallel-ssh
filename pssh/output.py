@@ -1,8 +1,6 @@
-#!/usr/bin/env python
-
 # This file is part of parallel-ssh.
 
-# Copyright (C) 2014-2017 Panos Kittenis
+# Copyright (C) 2014-2018 Panos Kittenis and contributors.
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -83,3 +81,6 @@ class HostOutput(dict):
                 stdout=self.stdout, stdin=self.stdin, stderr=self.stderr,
                 exception=self.exception, linesep=linesep,
                 exit_code=self.exit_code)
+
+    def __str__(self):
+        return self.__repr__()

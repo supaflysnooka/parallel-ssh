@@ -1,6 +1,6 @@
 # This file is part of parallel-ssh.
 
-# Copyright (C) 2014-2017 Panos Kittenis
+# Copyright (C) 2014-2018 Panos Kittenis and contributors.
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,5 +40,36 @@ class SSHException(Exception):
 
 
 class HostArgumentException(Exception):
-    """Raised on errors with per-host command arguments"""
+    """Raised on errors with per-host arguments to parallel functions"""
     pass
+
+
+class SessionError(Exception):
+    """Raised on errors establishing SSH session"""
+    pass
+
+
+class SFTPError(Exception):
+    """Raised on SFTP errors"""
+    pass
+
+
+class SFTPIOError(SFTPError):
+    """Raised on SFTP IO errors"""
+    pass
+
+
+class ProxyError(Exception):
+    """Raised on proxy errors"""
+
+
+class Timeout(Exception):
+    """Raised on timeout requested and reached"""
+
+
+class SCPError(Exception):
+    """Raised on errors copying file via SCP"""
+
+
+class PKeyFileError(Exception):
+    """Raised on errors finding private key file"""
